@@ -368,10 +368,22 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_fla
         //print_type_of(&lines);
         for line in lines.map_while(Result::ok) {
             let mut mod_line : String = line.clone();
-            //Changes to the line applied here before being written to the buffer.
-            mod_line.insert_str(0, "STRINGLN ");
-            mod_line.push_str("\n");
-            mf_string.push_str(mod_line.as_str());
+            // Its necessary to check if the line is empty. The ducky script runs so fast that
+            // especially on windows a STRINGLN with nothing after will be printed out as
+            // "TRINGLN", without the "S" at the start, which powershell just loses for some
+            // reason. this check is to mitigate that and try to write the lines correctly.
+            match line.trim().is_empty() {
+                true => {
+                    mod_line.push_str("ENTER\n");
+                    mf_string.push_str(mod_line.as_str());
+                },
+                false => {
+                    //Changes to the line applied here before being written to the buffer.
+                    mod_line.insert_str(0, "STRINGLN ");
+                    mod_line.push_str("\n");
+                    mf_string.push_str(mod_line.as_str());
+                },
+            }
 
         }
     } else {
@@ -470,7 +482,6 @@ fn end_boilerplate(os_type: &str ) -> String {
     os_end_string
 }
 
-//TODO: add the ability to run this recursively if the user provides a directory with -d.
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
     where P: AsRef<Path>, {
     
