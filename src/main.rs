@@ -1,6 +1,7 @@
 use std::{env, env::consts, fs::{File, read_dir, create_dir, create_dir_all}};
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
 
 fn main() -> io::Result<()> {
     let args : Vec<String> = env::args().collect();
@@ -31,12 +32,17 @@ fn main() -> io::Result<()> {
         let start_boiler: String = start_boilerplate(target_os, true, destination);
         write_buf.write(start_boiler.as_bytes());
 
-        for each in list_files {
+        let grande_string : String = match d_flag_handler(target_os, execute, list_files, destination) {
+            Ok(x) => x,
+            Err(e) => panic!("Got an error: {:?}", e),
+        };
+        write_buf.write(grande_string.as_bytes());
+        //for each in list_files {
 
-            let file_content = make_file_boilerplate(target_os, &each, destination);
-            write_buf.write(file_content.as_bytes());
+        //    let file_content = make_file_boilerplate(target_os, &each, destination);
+        //    write_buf.write(file_content.as_bytes());
 
-        }
+        //}
         let end_boiler: String = end_boilerplate(target_os);
         write_buf.write(end_boiler.as_bytes());
         //TODO: Fix this for -d implementation.
@@ -56,7 +62,7 @@ fn main() -> io::Result<()> {
         let mut write_buf = BufWriter::with_capacity(1000000, new_file);
         let start_boiler: String = start_boilerplate(target_os, false, destination);
         write_buf.write(start_boiler.as_bytes());
-        let file_content: String = make_file_boilerplate(target_os, &source_file, destination);
+        let file_content: String = make_file_boilerplate(target_os, &source_file, destination, false, false);
         write_buf.write(file_content.as_bytes());
         let end_boiler: String = end_boilerplate(target_os);
         write_buf.write(end_boiler.as_bytes());
@@ -101,6 +107,46 @@ fn main() -> io::Result<()> {
     //Ok(())
 
 }
+fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str) -> Result<String, HelpMessage> {
+    let mut grande_string : String = String::new();
+    println!("list of paths: {:?}", &source_files);
+    for current_path in source_files {
+        if current_path.is_dir() {
+            println!("current directory: {}", &current_path.display());
+            let mut list_files : Vec<PathBuf> = Vec::new();
+            //TODO add this whole section for getting the iterator as it's own function, as this is
+            //now already used 3 times in the code. 
+            let mut directory_iterator = match read_dir(&current_path) {
+                Ok(x) => x,
+                Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
+            };
+            while true {
+                let current_entry = directory_iterator.next();
+                println!("ENTRY of DIR: {:?}", current_entry);
+                match current_entry {
+                    Some(x) => match x {
+                        Ok(y) => list_files.push(y.path()),
+                        Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
+                    },
+                    None => break,
+                }
+            }
+            println!("value of list_files : {:?}", list_files);
+            match d_flag_handler(target_os, execute, list_files, destination) {
+                Ok(x) => {
+                            println!("Success."); 
+                            grande_string.push_str(&x);
+                        },
+                Err(e) => {eprintln!("Failed to process files/directories. Got error : {:?}", e); return Err(HelpMessage::FailedRecursionFS)},
+            }
+        } else {
+            let file_content = make_file_boilerplate(target_os, &current_path, destination, true, false);
+            grande_string.push_str(&file_content);
+
+        }
+    }
+    Ok(grande_string)
+} 
 
 //TODO: remove this code from the "main" function and just use this function, loop over it for when
 //handed directory. Then test it.
@@ -145,10 +191,10 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
             //1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
             let mut write_buf = BufWriter::with_capacity(1000000, new_file);
 
-            let start_boiler: String = start_boilerplate(target_os, false, destination);
+            let start_boiler: String = start_boilerplate(target_os, true, destination );
             write_buf.write(start_boiler.as_bytes());
 
-            let file_content : String = make_file_boilerplate(target_os, &current_path, destination);
+            let file_content : String = make_file_boilerplate(target_os, &current_path, destination, false, true);
             write_buf.write(file_content.as_bytes());
 
             let end_boiler: String = end_boilerplate(target_os);
@@ -194,11 +240,11 @@ fn adapt_path(the_path: &PathBuf, target_os: &str) -> Result<PathBuf, HelpMessag
         None => return Err(HelpMessage::FailedWorkingPath),
     };
     let mut modified_path : String = String::new();
-    if target_os != consts::OS {
-        if target_os == "windows" {
+    if target_os.to_lowercase() != consts::OS {
+        if target_os.to_lowercase() == "windows" {
             modified_path = path_string.replace("/","\\");
 
-        } else if target_os == "unix" {
+        } else if target_os.to_lowercase() == "unix" {
             modified_path = path_string.replace("\\","/");
         }
     }
@@ -247,21 +293,76 @@ fn executable_boiler(os_type: &str, source_file: &PathBuf) -> Result<String, Hel
     Ok(execute_string)
 }
 
-fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest_folder: &str) -> String {
+fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_flag: bool, m_flag: bool) -> String {
     let mut mf_string: String = String::new();
+    // Can only call .parent() on a PathBuf that is valid for the current OS (on which the command
+    // runs). It doesn't work if i modify the path to the target OS first and then try to call
+    // .parent() on it. That's why I do this before here, to create 2 seperate PathBuf's, one for
+    // creating directories and the other for making the file itself.  
+    let path_parent : PathBuf = match &source_file.parent() {
+        Some(x) => PathBuf::from(x),
+        None => panic!("Unrecoverable, failed to get parent path."),
+    };
+    let mod_path_parent :PathBuf = match adapt_path(&path_parent, os_type) {
+        Ok(x) => x,
+        Err(e) => panic!("Unrecoverable error processing changes to path. Got: {:?}", e),
+    };   
     let mod_path : PathBuf = match adapt_path(&source_file, os_type) {
         Ok(x) => x,
         Err(e) => panic!("Unrecoverable error processing changes to path. Got: {:?}", e),
     };
+    let file_name : &str = match &source_file.file_name() {
+        Some(x) => x.to_str().unwrap(),
+        None => panic!("No file name. Unrecoverable error."),
+    };
+    // To get rid of the file extensions as it looks weird to call a directory 'script.txt' for
+    // example.
+    let mod_dest : Vec<&str> = dest.split('.').collect();
+    let no_suffix_dest : &str = mod_dest[0];
 
     if os_type.to_lowercase() == "windows" {
+        if d_flag {
+            mf_string.push_str(format!(
+                "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\\{}\" -Force\n\
+                " , no_suffix_dest, mod_path_parent.display()).as_str())
+            //if m_flag {
+            //    mf_string.push_str(format!(
+            //        "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\" -Force\n\
+            //        "
+            //        , dest_folder).as_str())
+            //} else {
+            //    mf_string.push_str(format!(
+            //        "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\\{}\" -Force\n\
+            //        "
+            //        , no_suffix_dest, mod_path_parent.display()).as_str())
+            //}
+        }
         mf_string.push_str(
         "STRINGLN $file = @\"\n\
         ");
     } else if os_type.to_lowercase() == "unix" {
-        mf_string.push_str(format!(
-        "STRINGLN cat > {}/{}\n\
-        ", dest_folder, mod_path.display()).as_str());
+        //TODO create_dir here essentially acts like d_flag check, since d and m can't happen at
+        //the same time, chain these. Do check if they actually do the right thing.
+        if d_flag {
+            mf_string.push_str(format!(
+                "STRINGLN mkdir -p $HOME/{}/{}\n\
+                STRINGLN cat > $HOME/{}/{}\n\
+                " ,no_suffix_dest, mod_path_parent.display(), 
+                &no_suffix_dest, mod_path.display()
+                ).as_str());
+
+        } else if m_flag {
+            mf_string.push_str(format!(
+                "STRINGLN cat > $HOME/{}/{}\n\
+                ", &no_suffix_dest, file_name).as_str());
+        } else {
+            //This should use regular 'dest' as it's the normal base case where the user doesn't do
+            //multi file creation. 
+            mf_string.push_str(format!(
+                "STRINGLN cat > $HOME/{}\n\
+                ", dest).as_str());
+
+        }
     }
     if let Ok(lines) = read_lines(&source_file) {
         //print_type_of(&lines);
@@ -278,10 +379,24 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest_folder: &str
         panic!("Stopped due to above error.")
     }
     if os_type.to_lowercase() == "windows" {
-        mf_string.push_str(format!(
-        "STRINGLN \"@\n\
-        STRINGLN Set-Content -Path $HOME\\{}\\{} -Value $file\n\
-        ", &dest_folder, mod_path.display()).as_str());
+        if m_flag {
+            mf_string.push_str(format!(
+                "STRINGLN \"@\n\
+                STRINGLN Set-Content -Path $HOME\\{}\\{} -Value $file\n\
+                ", &no_suffix_dest, file_name).as_str());
+
+        } else if d_flag {
+            mf_string.push_str(format!(
+                "STRINGLN \"@\n\
+                STRINGLN Set-Content -Path $HOME\\{}\\{} -Value $file\n\
+                ", &no_suffix_dest, mod_path.display()).as_str());
+        } else {
+            mf_string.push_str(format!(
+                "STRINGLN \"@\n\
+                STRINGLN Set-Content -Path $HOME\\{} -Value $file\n\
+                ", dest).as_str());
+
+        }
     } else if os_type.to_lowercase() == "unix" {
         mf_string.push_str(
         "CTRL d\n\
@@ -294,6 +409,8 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest_folder: &str
 fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
     
     let mut os_start_string :String = String::new(); 
+    let mod_dest : Vec<&str> = dest.split('.').collect();
+    let no_suffix_dest : &str = mod_dest[0];
 
     if os_type.to_lowercase() == "windows" {
         os_start_string.push_str(
@@ -307,7 +424,7 @@ fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
         if is_dir {
             os_start_string.push_str(format!(
             "STRINGLN New-Item -Path \"$HOME\\{}\" -Type Directory\n\
-            ", dest).as_str());
+            ", no_suffix_dest).as_str());
         }
         
     } else if os_type.to_lowercase() == "unix" {
@@ -321,8 +438,8 @@ fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
         ");
         if is_dir {
             os_start_string.push_str(format!(
-                "STRINGLN mkdir {}\n\
-            ", dest).as_str());
+                "STRINGLN mkdir $HOME/{}\n\
+            ", no_suffix_dest).as_str());
         }
     } else {
         println!("Something went wrong the boilerplate start function got the wrong OS type: {}", os_type);
@@ -379,6 +496,7 @@ enum HelpMessage {
     NoParentPath,
     FailedMakingDirs,
     FailedWorkingPath,
+    FailedRecursionFS,
 }
 
 fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathBuf, &str, Vec<PathBuf>), HelpMessage> {
