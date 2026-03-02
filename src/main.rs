@@ -338,7 +338,7 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_fla
             //}
         }
         mf_string.push_str(
-        "STRINGLN $file = @\"\n\
+        "STRINGLN $file = @'\n\
         ");
     } else if os_type.to_lowercase() == "unix" {
         //TODO create_dir here essentially acts like d_flag check, since d and m can't happen at
@@ -381,18 +381,18 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_fla
     if os_type.to_lowercase() == "windows" {
         if m_flag {
             mf_string.push_str(format!(
-                "STRINGLN \"@\n\
+                "STRINGLN '@\n\
                 STRINGLN Set-Content -Path $HOME\\{}\\{} -Value $file\n\
                 ", &no_suffix_dest, file_name).as_str());
 
         } else if d_flag {
             mf_string.push_str(format!(
-                "STRINGLN \"@\n\
+                "STRINGLN '@\n\
                 STRINGLN Set-Content -Path $HOME\\{}\\{} -Value $file\n\
                 ", &no_suffix_dest, mod_path.display()).as_str());
         } else {
             mf_string.push_str(format!(
-                "STRINGLN \"@\n\
+                "STRINGLN '@\n\
                 STRINGLN Set-Content -Path $HOME\\{} -Value $file\n\
                 ", dest).as_str());
 
