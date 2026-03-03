@@ -1,16 +1,15 @@
 use std::{env, env::consts, fs::{File, read_dir, create_dir, create_dir_all}};
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 
 fn main() -> io::Result<()> {
     let args : Vec<String> = env::args().collect();
 
     //let Ok((target_os, source_file, destination_file)) = parse_args(&args) else { panic!("Err: Wrong usage, try again.")};
-    let (target_os, execute, d_flag, m_flag, source_file, destination, list_files) = match parse_args_advanced(&args) {
+    let (target_os, execute, x_value, d_flag, m_flag, source_file, destination, list_files) = match parse_args_advanced(&args) {
         Ok(x) => x,
         Err(x) => match x {
-            HelpMessage::MissingFlagO => panic!("Got wrong or missing argument to -o flag."),
+            HelpMessage::MissingFlagValueO => panic!("Got wrong or missing argument to -o flag."),
             _ => panic!("Got another error. Check usage."),
         }
     };
@@ -21,7 +20,7 @@ fn main() -> io::Result<()> {
             Ok(_) => println!("Made directory {}.", destination),
             Err(x) => eprintln!("Failed with following error: {}", x),
         }
-        match file_handler(target_os, execute, list_files, destination) {
+        match file_handler(target_os, execute, list_files, destination, d_flag, m_flag) {
             Ok(x) => println!("Succesfully created files."), 
             Err(e) => panic!("Got an error: {:?}, Check usage.", e),
         }
@@ -37,12 +36,13 @@ fn main() -> io::Result<()> {
             Err(e) => panic!("Got an error: {:?}", e),
         };
         write_buf.write(grande_string.as_bytes());
-        //for each in list_files {
-
-        //    let file_content = make_file_boilerplate(target_os, &each, destination);
-        //    write_buf.write(file_content.as_bytes());
-
-        //}
+        if execute {
+            let execute_boiler : String = match executable_boiler(target_os, &x_value, destination, d_flag, m_flag) {
+                Ok(x) => x,
+                Err(e) => panic!("Got an error: {:?}",e),
+            };
+            write_buf.write(execute_boiler.as_bytes());
+        }
         let end_boiler: String = end_boilerplate(target_os);
         write_buf.write(end_boiler.as_bytes());
         //TODO: Fix this for -d implementation.
@@ -64,47 +64,18 @@ fn main() -> io::Result<()> {
         write_buf.write(start_boiler.as_bytes());
         let file_content: String = make_file_boilerplate(target_os, &source_file, destination, false, false);
         write_buf.write(file_content.as_bytes());
+        if execute {
+            let execute_boiler : String = match executable_boiler(target_os, &x_value, destination, d_flag, m_flag) {
+                Ok(x) => x, 
+                Err(e) => panic!("Couldn't work with given x flag value, got error: {:?}", e),
+            };
+            write_buf.write(execute_boiler.as_bytes());
+        }
         let end_boiler: String = end_boilerplate(target_os);
         write_buf.write(end_boiler.as_bytes());
 
     }
     Ok(())
-    ////println!("the OS target is {target_os}, for target file {source_file} which will be turned into txt file with name {destination_file}");
-    //let new_file = File::create(destination_file)?;
-    ////1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
-    //let mut write_buf = BufWriter::with_capacity(1000000, new_file);
-    //
-    //let start_boiler: String = start_boilerplate(target_os, &source_file);
-    //write_buf.write(start_boiler.as_bytes());
-
-
-    //if let Ok(lines) = read_lines(&source_file) {
-    //    //print_type_of(&lines);
-    //    for line in lines.map_while(Result::ok) {
-    //        let mut mod_line : String = line.clone();
-    //        //Changes to the line applied here before being written to the buffer.
-    //        mod_line.insert_str(0, "STRINGLN ");
-    //        mod_line.push_str("\n");
-    //        write_buf.write(mod_line.as_bytes());
-
-    //    }
-    //} else {
-    //    println!("Err: File you specified doesn't exist or something else went wrong. Your file: {}", &source_file.display());
-    //}
-
-    //let end_boiler: String = end_boilerplate(target_os, &source_file);
-    //write_buf.write(end_boiler.as_bytes());
-
-    //if execute == true {
-    //    let exec_string = match executable_boiler(target_os, &source_file) {
-    //        Ok(x) => x,
-    //        Err(x) => panic!("Got an error: {:?}", x),
-    //    };
-    //    write_buf.write(exec_string.as_bytes());
-    //}
-    ////This pushes the contents of the buffer to the file. 
-    //write_buf.flush()?;
-    //Ok(())
 
 }
 fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str) -> Result<String, HelpMessage> {
@@ -150,7 +121,7 @@ fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, de
 
 //TODO: remove this code from the "main" function and just use this function, loop over it for when
 //handed directory. Then test it.
-fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str) -> Result<(), HelpMessage> {
+fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str, d_flag: bool, m_flag: bool) -> Result<(), HelpMessage> {
 
     for current_path in source_files {
         if current_path.is_dir() {
@@ -169,7 +140,7 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                     None => break,
                 }
             }
-            file_handler(target_os, execute, list_files, destination);
+            file_handler(target_os, execute, list_files, destination, d_flag, m_flag);
         } else {
 
             let mut my_path : PathBuf = PathBuf::new();
@@ -196,6 +167,17 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
 
             let file_content : String = make_file_boilerplate(target_os, &current_path, destination, false, true);
             write_buf.write(file_content.as_bytes());
+
+            if execute {
+                // Here I use &current path instead of x_value, I do this because on -m flag it makes no sense
+                // to specify a file name for all of the new files to execute, so instead each file
+                // will execute the file it creates. 
+                let execute_boiler : String = match executable_boiler(target_os, &current_path, destination, d_flag, m_flag) {
+                    Ok(x) => x,
+                    Err(e) => panic!("Got an error: {:?}",e),
+                };
+                write_buf.write(execute_boiler.as_bytes());
+            }
 
             let end_boiler: String = end_boilerplate(target_os);
             write_buf.write(end_boiler.as_bytes());
@@ -252,43 +234,100 @@ fn adapt_path(the_path: &PathBuf, target_os: &str) -> Result<PathBuf, HelpMessag
     
 }
 
-fn executable_boiler(os_type: &str, source_file: &PathBuf) -> Result<String, HelpMessage> {
+fn executable_boiler(os_type: &str, source_file: &PathBuf, destination : &str, d_flag: bool, m_flag: bool) -> Result<String, HelpMessage> {
     let mut execute_string : String = String::new();
 
-    //TODO improve this here. Currently we just take the source file path, but if the source file
-    //is nested in a directory that directory is also stored in the 'source_file' argument we pass
-    //here, I want to be able just use the name of the file to create it on the host system running
-    //the ducky script. 
-    //Essentially one of the problems is that this will write stuff like:
-    //$code = Get-Content .\test_files/short_test.txt -Raw
-    //But notice how this wouldn't work on windows since it uses forward slashes. 
-    //Need to handle this by checking OS type of where the command is run to generate ducky script. 
-    //
-    //EXAMPLE STRING for executing script on powershell windows: 
-    //"""
-    //STRINGLN $code = Get-Content .\\{YOUR_SOURCE_FILE} -Raw\n\
-    //DELAY 400\n\
-    //STRINGLN Invoke-Expression $code\n\
-    //"""
+    let mod_dest : Vec<&str> = destination.split('.').collect();
+    let no_suffix_dest : &str = mod_dest[0];
+
+    let file_name : &str = match &source_file.file_name() {
+        Some(x) => x.to_str().unwrap(),
+        None => panic!("No file name. Unrecoverable error."),
+    };
+    let adapted_path : PathBuf = match adapt_path(&source_file, os_type) {
+        Ok(x) => x,
+        Err(e) => return Err(e),
+    };
+    let mut no_prefix_adapted_path : &str = "";
     if os_type.to_lowercase() == "windows" {
-        execute_string.push_str(
-        "DELAY 100\n\
-        STRINGLN Set-ExecutionPolicy RemoteSigned -Scope CurrentUser\n\
-        DELAY 200\n\
-        STRINGLN $code = Get-Content .\\{YOUR_SOURCE_FILE} -Raw\n\
-        DELAY 400\n\
-        STRINGLN Invoke-Expression $code\n\
-        ");
+        no_prefix_adapted_path = match adapted_path.strip_prefix("\\") {
+            Ok(x) => x.to_str().unwrap(),
+            Err(e) => {eprintln!("Failed to strip prefix: {:?}", e); adapted_path.to_str().unwrap()},
+        };
 
     } else if os_type.to_lowercase() == "unix" {
-        execute_string.push_str(format!(
-            "STRINGLN chmod +x {}\n\
-            DELAY 100\n\
-            STRINGLN ./{}\n\
-            ", source_file.display(), source_file.display()).as_str());
-        
+        no_prefix_adapted_path = match adapted_path.strip_prefix("/") {
+            Ok(x) => x.to_str().unwrap(),
+            Err(e) => {eprintln!("Failed to strip prefix: {:?}", e); adapted_path.to_str().unwrap()},
+        };
+
+    }
+
+    if os_type.to_lowercase() == "windows" {
+        execute_string.push_str(
+                "DELAY 100\n\
+                STRINGLN Set-ExecutionPolicy RemoteSigned -Scope CurrentUser\n\
+                DELAY 200\n\
+                ");
+
+    } 
+    if d_flag {
+        if os_type.to_lowercase() == "windows" {
+            execute_string.push_str(format!(
+                    "STRINGLN $code = Get-Content .\\$HOME\\{}\\{} -Raw\n\
+                    DELAY 400\n\
+                    STRINGLN Invoke-Expression $code\n\
+                    ", no_suffix_dest, source_file.display()).as_str());
+
+        } else if os_type.to_lowercase() == "unix" {
+            execute_string.push_str(format!(
+                    "STRINGLN chmod +x $HOME/{}/{}\n\
+                    DELAY 100\n\
+                    STRINGLN $HOME/{}/{}\n\
+                    ",no_suffix_dest, no_prefix_adapted_path, destination, no_prefix_adapted_path).as_str());
+
+        } else {
+            return Err(HelpMessage::WrongArgOS)
+        }
+
+    } else if m_flag {
+        if os_type.to_lowercase() == "windows" {
+            execute_string.push_str(format!(
+                    "STRINGLN $code = Get-Content .\\$HOME\\{}\\{} -Raw\n\
+                    DELAY 400\n\
+                    STRINGLN Invoke-Expression $code\n\
+                    ", no_suffix_dest, file_name).as_str());
+
+        } else if os_type.to_lowercase() == "unix" {
+            execute_string.push_str(format!(
+                    "STRINGLN chmod +x $HOME/{}/{}\n\
+                    DELAY 100\n\
+                    STRINGLN $HOME/{}/{}\n\
+                    ", no_suffix_dest, file_name, no_suffix_dest, file_name).as_str());
+
+        } else {
+            return Err(HelpMessage::WrongArgOS)
+        }
+
     } else {
-        return Err(HelpMessage::WrongArgOS)
+        if os_type.to_lowercase() == "windows" {
+            execute_string.push_str(format!(
+                    "STRINGLN $code = Get-Content .\\$HOME\\{} -Raw\n\
+                    DELAY 400\n\
+                    STRINGLN Invoke-Expression $code\n\
+                    ",source_file.display()).as_str());
+
+        } else if os_type.to_lowercase() == "unix" {
+            execute_string.push_str(format!(
+                    "STRINGLN chmod +x $HOME/{}\n\
+                    DELAY 100\n\
+                    STRINGLN $HOME/{}\n\
+                    ", source_file.display(), source_file.display()).as_str());
+
+        } else {
+            return Err(HelpMessage::WrongArgOS)
+        }
+
     }
     Ok(execute_string)
 }
@@ -325,17 +364,6 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_fla
             mf_string.push_str(format!(
                 "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\\{}\" -Force\n\
                 " , no_suffix_dest, mod_path_parent.display()).as_str())
-            //if m_flag {
-            //    mf_string.push_str(format!(
-            //        "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\" -Force\n\
-            //        "
-            //        , dest_folder).as_str())
-            //} else {
-            //    mf_string.push_str(format!(
-            //        "STRINGLN New-Item -ItemType Directory -Path \"$HOME\\{}\\{}\" -Force\n\
-            //        "
-            //        , no_suffix_dest, mod_path_parent.display()).as_str())
-            //}
         }
         mf_string.push_str(
         "STRINGLN $file = @'\n\
@@ -360,7 +388,7 @@ fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d_fla
             //multi file creation. 
             mf_string.push_str(format!(
                 "STRINGLN cat > $HOME/{}\n\
-                ", dest).as_str());
+                ", file_name).as_str());
 
         }
     }
@@ -468,11 +496,11 @@ fn end_boilerplate(os_type: &str ) -> String {
     let mut os_end_string: String = String::new();
     if os_type.to_lowercase() == "windows" {
         os_end_string.push_str(
-            "STRINGLN end or progrman! Do what you want now...\n");
+            "STRING end of programn ! Do what you want now...\n");
         
     } else if os_type.to_lowercase() == "unix" {
         os_end_string.push_str(
-            "STRINGLN end of programn! Do other stuff here if you want now...\n");
+            "STRING end of programn! Do other stuff here if you want now...\n");
 
     } else {
         println!("Something went wrong the boilerplate start function got the wrong OS type: {}", os_type);
@@ -494,7 +522,8 @@ enum HelpMessage {
     NotEnoughArgs,
     WrongArgOS,
     FileDoesNotExist,
-    MissingFlagO,
+    MissingFlagValueO,
+    MissingFlagValueX,
     DirectoryDoesNotExist,
     FailedToGetFile,
     FailedToMakeFile,
@@ -508,21 +537,22 @@ enum HelpMessage {
     FailedMakingDirs,
     FailedWorkingPath,
     FailedRecursionFS,
+    FailedStrippingPrefix,
 }
 
-fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathBuf, &str, Vec<PathBuf>), HelpMessage> {
+fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bool, PathBuf, &str, Vec<PathBuf>), HelpMessage> {
     
     let mut iterator_args = args.into_iter();
     let _ = iterator_args.next();
 
     //TODO: Set this to 'Windows' or 'Unix' to make it default.
-    let mut os_target : &str = ""; 
+    let mut os_target : &str = "windows"; 
     let mut executable : bool = false;
+    let mut x_value : PathBuf = PathBuf::new();
     let mut d_flag: bool = false;
     let mut m_flag : bool = false;
     let mut list_files : Vec<PathBuf> = Vec::new();
     let mut count : i32 = 0;
-    //let mut source_path: &str = "";
     let mut source_path: std::path::PathBuf = PathBuf::new();
     let mut target_dest: &str = "";
 
@@ -537,9 +567,16 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathB
             match x.as_str() {
                 "-o" => match iterator_args.next() {
                             Some(x) => os_target = x,
-                            None => return Err(HelpMessage::MissingFlagO)
+                            None => return Err(HelpMessage::MissingFlagValueO)
                         },
-                "-x" => executable = true,
+                "-x" => {
+                            executable = true;
+                            match iterator_args.next() {
+                                Some(x) => x_value = PathBuf::from(x),
+                                None => return Err(HelpMessage::MissingFlagValueX)
+                            }
+                            
+                        },
                 //TODO: this has to be the last option given. Mention in help.
                 "-d" => match iterator_args.next() {
                             Some(x) => {
@@ -572,7 +609,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathB
                                         None => break,
                                     }
                                 }
-                                return Ok((os_target, executable, d_flag, m_flag, source_path, target_dest, list_files))
+                                return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
                                 
                             },
                             None => return Err(HelpMessage::NoValueForFlagD)
@@ -603,7 +640,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathB
                                                 None => break,
                                             }
                                         }
-                                        return Ok((os_target, executable, d_flag, m_flag, source_path, target_dest, list_files))
+                                        return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
                                         },
                             None => return Err(HelpMessage::NoValueForFlagM),
                         },
@@ -612,7 +649,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, bool, bool, PathB
             None => break,
         }
     }
-    Ok((os_target, executable, d_flag, m_flag, source_path, target_dest, list_files))
+    Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
 }
 
 
