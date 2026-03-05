@@ -6,11 +6,12 @@ fn main() -> io::Result<()> {
     let args : Vec<String> = env::args().collect();
 
     //let Ok((target_os, source_file, destination_file)) = parse_args(&args) else { panic!("Err: Wrong usage, try again.")};
-    let (target_os, execute, x_value, d_flag, m_flag, source_file, destination, list_files) = match parse_args_advanced(&args) {
+    let (target_os, execute, x_value, d_flag, m_flag, source_file, destination, list_files, close_window) = match parse_args_advanced(&args) {
         Ok(x) => x,
-        Err(x) => match x {
+        Err(e) => match e {
             HelpMessage::MissingFlagValueO => panic!("Got wrong or missing argument to -o flag."),
-            _ => panic!("Got another error. Check usage."),
+            HelpMessage::PrintingHelp => {println!("Hope that helped :)"); return Ok(())},
+            _ => panic!("Got another error. Check usage. Got: {:?}", e),
         }
     };
     println!("{}, {}, {}, {}", d_flag, m_flag, source_file.display(), destination);
@@ -20,7 +21,7 @@ fn main() -> io::Result<()> {
             Ok(_) => println!("Made directory {}.", destination),
             Err(x) => eprintln!("Failed with following error: {}", x),
         }
-        match file_handler(target_os, execute, list_files, destination, d_flag, m_flag) {
+        match file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window) {
             Ok(x) => println!("Succesfully created files."), 
             Err(e) => panic!("Got an error: {:?}, Check usage.", e),
         }
@@ -43,7 +44,7 @@ fn main() -> io::Result<()> {
             };
             write_buf.write(execute_boiler.as_bytes());
         }
-        let end_boiler: String = end_boilerplate(target_os);
+        let end_boiler: String = end_boilerplate(target_os, close_window);
         write_buf.write(end_boiler.as_bytes());
         //TODO: Fix this for -d implementation.
         //if execute == true {
@@ -71,7 +72,7 @@ fn main() -> io::Result<()> {
             };
             write_buf.write(execute_boiler.as_bytes());
         }
-        let end_boiler: String = end_boilerplate(target_os);
+        let end_boiler: String = end_boilerplate(target_os, close_window);
         write_buf.write(end_boiler.as_bytes());
 
     }
@@ -121,7 +122,7 @@ fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, de
 
 //TODO: remove this code from the "main" function and just use this function, loop over it for when
 //handed directory. Then test it.
-fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str, d_flag: bool, m_flag: bool) -> Result<(), HelpMessage> {
+fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str, d_flag: bool, m_flag: bool, close_window : bool) -> Result<(), HelpMessage> {
 
     for current_path in source_files {
         if current_path.is_dir() {
@@ -140,7 +141,7 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                     None => break,
                 }
             }
-            file_handler(target_os, execute, list_files, destination, d_flag, m_flag);
+            file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window);
         } else {
 
             let mut my_path : PathBuf = PathBuf::new();
@@ -179,18 +180,9 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                 write_buf.write(execute_boiler.as_bytes());
             }
 
-            let end_boiler: String = end_boilerplate(target_os);
+            let end_boiler: String = end_boilerplate(target_os, close_window);
             write_buf.write(end_boiler.as_bytes());
 
-            //TODO: reimplement this, exectuable_boiler() needs its own target file when there are multiple
-            //files in the directory.
-            //if execute == true {
-            //    let exec_string = match executable_boiler(target_os, &current_path) {
-            //        Ok(x) => x,
-            //        Err(x) => panic!("Got an error: {:?}", x),
-            //    };
-            //    write_buf.write(exec_string.as_bytes());
-            //}
             //This pushes the contents of the buffer to the file. 
             match write_buf.flush() {
                 Ok(x) => println!("Successfully wrote file."),
@@ -252,13 +244,13 @@ fn executable_boiler(os_type: &str, source_file: &PathBuf, destination : &str, d
     if os_type.to_lowercase() == "windows" {
         no_prefix_adapted_path = match adapted_path.strip_prefix("\\") {
             Ok(x) => x.to_str().unwrap(),
-            Err(e) => {eprintln!("Failed to strip prefix: {:?}", e); adapted_path.to_str().unwrap()},
+            Err(e) => {eprintln!("No prefix: {:?}, Continuing...", e); adapted_path.to_str().unwrap()},
         };
 
     } else if os_type.to_lowercase() == "unix" {
         no_prefix_adapted_path = match adapted_path.strip_prefix("/") {
             Ok(x) => x.to_str().unwrap(),
-            Err(e) => {eprintln!("Failed to strip prefix: {:?}", e); adapted_path.to_str().unwrap()},
+            Err(e) => {eprintln!("No prefix: {:?}, Continuing...", e); adapted_path.to_str().unwrap()},
         };
 
     }
@@ -277,14 +269,14 @@ fn executable_boiler(os_type: &str, source_file: &PathBuf, destination : &str, d
                     "STRINGLN $code = Get-Content .\\$HOME\\{}\\{} -Raw\n\
                     DELAY 400\n\
                     STRINGLN Invoke-Expression $code\n\
-                    ", no_suffix_dest, source_file.display()).as_str());
+                    ", no_suffix_dest, no_prefix_adapted_path).as_str());
 
         } else if os_type.to_lowercase() == "unix" {
             execute_string.push_str(format!(
                     "STRINGLN chmod +x $HOME/{}/{}\n\
                     DELAY 100\n\
                     STRINGLN $HOME/{}/{}\n\
-                    ",no_suffix_dest, no_prefix_adapted_path, destination, no_prefix_adapted_path).as_str());
+                    ",no_suffix_dest, no_prefix_adapted_path, no_suffix_dest , no_prefix_adapted_path).as_str());
 
         } else {
             return Err(HelpMessage::WrongArgOS)
@@ -309,20 +301,23 @@ fn executable_boiler(os_type: &str, source_file: &PathBuf, destination : &str, d
             return Err(HelpMessage::WrongArgOS)
         }
 
+        //Note that even in the below standard case where we just generate 1 file, we still need to
+        //specify the name of the file we want to execute as that is the name of the file that will
+        //be added to the execution busbi script. 
     } else {
         if os_type.to_lowercase() == "windows" {
             execute_string.push_str(format!(
-                    "STRINGLN $code = Get-Content .\\$HOME\\{} -Raw\n\
+                    "STRINGLN $code = Get-Content $HOME\\{} -Raw\n\
                     DELAY 400\n\
                     STRINGLN Invoke-Expression $code\n\
-                    ",source_file.display()).as_str());
+                    ",file_name).as_str());
 
         } else if os_type.to_lowercase() == "unix" {
             execute_string.push_str(format!(
                     "STRINGLN chmod +x $HOME/{}\n\
                     DELAY 100\n\
                     STRINGLN $HOME/{}\n\
-                    ", source_file.display(), source_file.display()).as_str());
+                    ", file_name, file_name).as_str());
 
         } else {
             return Err(HelpMessage::WrongArgOS)
@@ -492,20 +487,24 @@ fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
 }
 
 //Add whatever the final part of the Bad usb script should do here.
-fn end_boilerplate(os_type: &str ) -> String {
+fn end_boilerplate(os_type: &str , close_window : bool) -> String {
     let mut os_end_string: String = String::new();
-    if os_type.to_lowercase() == "windows" {
-        os_end_string.push_str(
-            "STRING end of programn ! Do what you want now...\n");
-        
-    } else if os_type.to_lowercase() == "unix" {
-        os_end_string.push_str(
-            "STRING end of programn! Do other stuff here if you want now...\n");
+    if close_window {
+        os_end_string.push_str("STRINGLN exit\n");
+
 
     } else {
-        println!("Something went wrong the boilerplate start function got the wrong OS type: {}", os_type);
-        //TODO: proper error handling.
-        panic!();
+        if os_type.to_lowercase() == "windows" {
+            os_end_string.push_str(
+                "STRING end of programn ! Do what you want now...\n");
+
+        } else if os_type.to_lowercase() == "unix" {
+            os_end_string.push_str(
+                "STRING end of programn! Do other stuff here if you want now...\n");
+
+        } else {
+            panic!("Something went wrong the boilerplate start function got the wrong OS type: {}", os_type);
+        }
     }
     os_end_string
 }
@@ -538,9 +537,10 @@ enum HelpMessage {
     FailedWorkingPath,
     FailedRecursionFS,
     FailedStrippingPrefix,
+    PrintingHelp,
 }
 
-fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bool, PathBuf, &str, Vec<PathBuf>), HelpMessage> {
+fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bool, PathBuf, &str, Vec<PathBuf>, bool), HelpMessage> {
     
     let mut iterator_args = args.into_iter();
     let _ = iterator_args.next();
@@ -555,21 +555,19 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
     let mut count : i32 = 0;
     let mut source_path: std::path::PathBuf = PathBuf::new();
     let mut target_dest: &str = "";
+    let mut close_window : bool = false;
 
-    if args.len() < 3 {
-        return Err(HelpMessage::NotEnoughArgs)
-    }
 
     while true {
         let c_arg = iterator_args.next();
         match c_arg {
             Some(x) => 
             match x.as_str() {
-                "-o" => match iterator_args.next() {
+                "-o" | "--os"=> match iterator_args.next() {
                             Some(x) => os_target = x,
                             None => return Err(HelpMessage::MissingFlagValueO)
                         },
-                "-x" => {
+                "-x" | "--execute" => {
                             executable = true;
                             match iterator_args.next() {
                                 Some(x) => x_value = PathBuf::from(x),
@@ -578,7 +576,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
                             
                         },
                 //TODO: this has to be the last option given. Mention in help.
-                "-d" => match iterator_args.next() {
+                "-d" | "--directory" => match iterator_args.next() {
                             Some(x) => {
                                 d_flag = true;
                                 if m_flag == true {
@@ -609,13 +607,13 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
                                         None => break,
                                     }
                                 }
-                                return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
+                                return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
                                 
                             },
                             None => return Err(HelpMessage::NoValueForFlagD)
                 },
                 //TODO: this has to be the last option given. Mention in help.
-                "-m" => match iterator_args.next() {
+                "-m" | "--many" => match iterator_args.next() {
                             Some(x) => {
                                         m_flag = true;
                                         if d_flag == true {
@@ -640,67 +638,160 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
                                                 None => break,
                                             }
                                         }
-                                        return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
+                                        return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
                                         },
                             None => return Err(HelpMessage::NoValueForFlagM),
                         },
+                "-c" | "--close" => close_window = true, 
+                "-h" | "--help" => {
+                                        help_message();
+                                        return Err(HelpMessage::PrintingHelp)
+                                    },
                 s => {if count > 0 {target_dest = s} else {count += 1; source_path = PathBuf::from(s)}}, 
             },
             None => break,
         }
     }
-    Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files))
-}
-
-
-//old function
-fn parse_args(args: &[String]) -> Result<(&str, &str, &str), String> {
-    
-    println!("{:?}, ", args);
-    match args.len() {
-        // the first argument is automatic and is the binary path to where the script is running
-        // from.
-        0 | 1 | 2 => {
-            Err(help_message("Need minimum 2 arguments, see above instructions."))
-        },
-        3 => {
-            let src_file = &args[1];
-            let dst_file = &args[2];
-
-
-            return Ok(("windows", src_file, dst_file))
-        },
-        4 => {
-            Err(help_message("3 arguments not possible, see above instructions."))
-        },
-        5 => {
-            if &args[1] == "-o" {
-                if &args[2].to_lowercase() != "windows" && &args[2].to_lowercase() != "unix" {
-                    return Err(help_message("OS type for -o not recongnized. Only 'Unix' & 'Windows' are valid. Case insensitive.")) 
-                }
-            } else {
-                return Err(help_message("Illegal arguments, check usage above."))
-            }
-            let os_type = &args[2];
-            let src_file = &args[3];
-            let dst_file = &args[4];
-            Ok((os_type, src_file, dst_file))
-        },
-        _ => {
-            Err(help_message("Too many arguments, see above instructions."))
-        }  
+    if args.len() < 3 {
+        return Err(HelpMessage::NotEnoughArgs)
     }
-    
+    Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
 }
 
-fn help_message(msg: &str) -> String {
-    println!("USAGE: busb [source_file] [destination_file]");
-    println!("Possible Flags:");
-    println!("  -o Selects the OS type for the command to target. If you are running on linux use 'Unix'. Default: 'Windows'");
-    println!("  -h Prints this help message.");
-    println!("example:");
-    println!("  busb my_test.sh my_new_file.txt");
-    println!("example with OS selection:");
-    println!("  busb -o Unix my_test.sh my_new_file.txt");
-    return String::from(msg)
+
+
+fn help_message()  {
+
+    println!("");
+    println!("\t\t\t\x1b[4;32;40;1mWELCOME TO BUSBI!\x1b[0m\n");
+    println!(" This Command Line Tool is for creating bad USB scripts AKA ducky scripts for copying");
+    println!(" over targeted scripts or entire folders of them onto another machine through a ducky script");
+    println!(" and possibly executing said scripts.");
+    println!(" Note that the intended use is for shell scripts like '.sh' and '.ps1' but any text based");
+    println!(" file works. So you can copy code or whole essays this way.\n");
+    println!(" The files generated by busbi use the Flipper Zero BadUSB File format, see their webpage:\n");
+    println!(" https://developer.flipper.net/flipperzero/doxygen/badusb_file_format.html");
+    println!("");
+    print!(" ");
+    print!("\x1b[4;31mUSAGE:\x1b[0m");
+    println!(" busbi [Options] [SOURCE FILE/DIR] [DESTINATION FILE/DIR]\n");
+    print!(" ");
+    println!("\x1b[4;35mPossible Options:\x1b[0m\n");
+    println!("\t-o  --os         Selects the OS that you are targeting, i.e where your Bad USB\n\
+              \t                 script will run. If you are running the busbi command on a\n\
+              \t                 Windows or Unix system but the machine you want to target with the\n\
+              \t                 generated script is a linux machine, then set this to 'unix'.\n");
+    print!("\t                 ");
+    println!("\x1b[4mDefault: Windows\x1b[0m\n");
+    println!("\t-h  --help       Prints this help message.\n");
+    println!("\t-d  --directory  Use this flag to target a directory, this flag MUST be followed by\n\
+              \t                 the SOURCE and DESTINATION arguments. CANNOT be combined with '-m'.\n\
+              \t                 The specified directory will be written in it's entirety to the\n\
+              \t                 bad usb file, which will have the name of your DESTINATION\n\
+              \t                 argument. DESTINATION MUST end with '.txt'.\n\
+              \t                 When the bad USB script is used on the target system it will\n\
+              \t                 replicate the folders and files in their entirety on the host\n\
+              \t                 system under the $HOME\\DESTINATION directory or $HOME/DESTINATION\n\
+              \t                 if on Unix.\n\
+              \t                 See the Examples below for more help.\n
+        ");
+    println!("\t-m  --many       Use this flag to target a directory containing many files and/or\n\
+              \t                 scripts. Each file inside the directory and it's sub-directories\n\
+              \t                 will be turned into their own bad usb scripts under the DESTINATION\n\
+              \t                 folder it creates. Note that the DESTINATION folder will be created\n\
+              \t                 in the directory where you ran the busbi command.\n\
+              \t                 This flag CANNOT be used together with '-d'. Just like with '-d' you\n\
+              \t                 must specify the SOURCE DIR and DESTINATION right after. Essentially\n\
+              \t                 it must be the last flag/option you use.\n\
+              \t                 The created script -if run- will copy the contents of their target\n\
+              \t                 file onto the host and will be put under the $HOME/DESTINATION\n\
+              \t                 folder.");
+    print!("\t                 ");
+    print!("\x1b[4mNote:\x1b[0m");
+    print!(" If used with '-x' option, this will cause all generated bad\n\
+              \t                 USB scripts to execute the file they copy over onto the host.\n\n");
+    println!("\t-c  --close      Closes the terminal/powershell window when the bad USB script\n\
+              \t                 finishes.\n");
+    println!("\t-x  --execute    Use this option to specify 1 file to execute at the end of the\n\
+              \t                 bad usb script. Can be used with '-d' and '-m'.\n\
+              \t                 If used with '-m' it will make every bad USB script generated\n\
+              \t                 execute the file it copied over. Note that you should still\n\
+              \t                 specify the target folder you put in the DESTINATION.\n\
+              \t                 See examples below.\n\
+              \t                 If used with '-d' you simply specify the file in the directory\n\
+              \t                 you are targeting that should be executed at the end when all\n\
+              \t                 files have been copied over.\n\
+              \t                 See the examples below.");
+    print!("\t                 ");
+    print!("\x1b[4mNote:\x1b[0m");
+    print!(" This can be used to run scripts that were not explicitely\n\
+              \t                 copied over, as long as they are in the $HOME/DESTINAITON folder.\n");
+    print!(" ");
+    println!("\x1b[4;32mExamples:\x1b[0m");
+    println!("");
+    println!("\tAll examples will assume the existence of these files and folder:\n");
+    println!("\t\tscripts_test/
+\t\t├── hello.sh
+\t\t├── nested_folder
+\t\t│   └── count.sh
+\t\t└── whoami.sh
+");
+    println!("\t\x1b[4mSimple Usage:\x1b[0m\n");
+    println!("\t\tbusbi scripts_test/hello.sh new_busbi.txt\n");
+    println!("\tWill create the following file:");
+    println!("\t\t.
+\t\t├── new_busbi.txt
+\t\t└── scripts_test
+\t\t    ├── hello.sh
+\t\t    ├── nested_folder
+\t\t    │   └── count.sh
+\t\t    └── whoami.sh
+");
+    println!("\t\x1b[4mTarget Unix and Close the terminal/powershell at script end:\x1b[0m\n");
+    println!("\t\tbusbi -o unix -c scripts_test/hello.sh new_busbi.txt\n");
+    println!("\t\x1b[4mTarget Unix and execute target shell script:\x1b[0m\n");
+    println!("\t\tbusbi -o unix -x scripts_test/hello.sh scripts_test/hello.sh new_busbi.txt\n");
+    println!("\t\x1b[4mTarget Unix and target directory for copying:\x1b[0m\n");
+    println!("\t\tbusbi -o unix -d scripts_test/ large_busbi.txt\n");
+    println!("\tWill create the following file:");
+    println!("\t\t.
+\t\t├── large_busbi.txt
+\t\t└── scripts_test
+\t\t    ├── hello.sh
+\t\t    ├── nested_folder
+\t\t    │   └── count.sh
+\t\t    └── whoami.sh
+");
+    println!("\t\x1b[4mTarget Unix and create many bad USB scripts:\x1b[0m\n");
+    println!("\t\tbusbi -o unix -m scripts_test/ new_folder\n");
+    println!("\tWill create the following folder with files:");
+    println!("\t\t.
+\t\t├── new_folder
+\t\t│   └── scripts_test
+\t\t│       ├── hello.txt
+\t\t│       ├── nested_folder
+\t\t│       │   └── count.txt
+\t\t│       └── whoami.txt
+\t\t└── scripts_test
+\t\t    ├── hello.sh
+\t\t    ├── nested_folder
+\t\t    │   └── count.sh
+\t\t    └── whoami.sh
+");
+    print!("\t\x1b[4mNote:\x1b[0m");
+    println!(" That the command recreated the nested folder structure and turned every\n\
+        \t      script into a bad USB file without replacing the originals.\n");
+    println!("\t\x1b[4mCreate many bad USB scripts and each executes copied file:\x1b[0m\n");
+    println!("\t\tbusbi -x scripts_test -m scripts_test/ new_folder\n");
+    println!("\t\x1b[4mUnix/Close/Execute/Target directory:\x1b[0m\n");
+    println!("\t\tbusbi -o unix -c -x scripts_test/nested_folder/count.sh -d scripts_test/ large_busbi.txt\n");
+    println!("\tWill still just create a single file:");
+    println!("\t\t.
+\t\t├── large_busbi.txt
+\t\t└── scripts_test
+\t\t    ├── hello.sh
+\t\t    ├── nested_folder
+\t\t    │   └── count.sh
+\t\t    └── whoami.sh
+");
 }
