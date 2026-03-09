@@ -22,7 +22,7 @@ fn main() -> io::Result<()> {
             Err(x) => eprintln!("Failed with following error: {}", x),
         }
         match file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window) {
-            Ok(x) => println!("Succesfully created files."), 
+            Ok(_x) => println!("Succesfully created files."), 
             Err(e) => panic!("Got an error: {:?}, Check usage.", e),
         }
     } else if d_flag {
@@ -30,50 +30,41 @@ fn main() -> io::Result<()> {
         //1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
         let mut write_buf = BufWriter::with_capacity(1000000, new_file);
         let start_boiler: String = start_boilerplate(target_os, true, destination);
-        write_buf.write(start_boiler.as_bytes());
+        let _ = write_buf.write(start_boiler.as_bytes());
 
         let grande_string : String = match d_flag_handler(target_os, execute, list_files, destination) {
             Ok(x) => x,
             Err(e) => panic!("Got an error: {:?}", e),
         };
-        write_buf.write(grande_string.as_bytes());
+        let _ = write_buf.write(grande_string.as_bytes());
         if execute {
             let execute_boiler : String = match executable_boiler(target_os, &x_value, destination, d_flag, m_flag) {
                 Ok(x) => x,
                 Err(e) => panic!("Got an error: {:?}",e),
             };
-            write_buf.write(execute_boiler.as_bytes());
+            let _ = write_buf.write(execute_boiler.as_bytes());
         }
         let end_boiler: String = end_boilerplate(target_os, close_window);
-        write_buf.write(end_boiler.as_bytes());
-        //TODO: Fix this for -d implementation.
-        //if execute == true {
-        //    let exec_string = match executable_boiler(target_os, &source_file) {
-        //        Ok(x) => x,
-        //        Err(x) => panic!("Got an error: {:?}", x),
-        //    };
-        //    write_buf.write(exec_string.as_bytes());
-        //}
+        let _ = write_buf.write(end_boiler.as_bytes());
         //This pushes the contents of the buffer to the file. 
         write_buf.flush()?;
 
     } else {
         let new_file = File::create(destination)?;
-        //1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
         let mut write_buf = BufWriter::with_capacity(1000000, new_file);
         let start_boiler: String = start_boilerplate(target_os, false, destination);
-        write_buf.write(start_boiler.as_bytes());
+        let _ = write_buf.write(start_boiler.as_bytes());
         let file_content: String = make_file_boilerplate(target_os, &source_file, destination, false, false);
-        write_buf.write(file_content.as_bytes());
+        let _ = write_buf.write(file_content.as_bytes());
         if execute {
             let execute_boiler : String = match executable_boiler(target_os, &x_value, destination, d_flag, m_flag) {
                 Ok(x) => x, 
                 Err(e) => panic!("Couldn't work with given x flag value, got error: {:?}", e),
             };
-            write_buf.write(execute_boiler.as_bytes());
+            let _ = write_buf.write(execute_boiler.as_bytes());
         }
         let end_boiler: String = end_boilerplate(target_os, close_window);
-        write_buf.write(end_boiler.as_bytes());
+        let _ = write_buf.write(end_boiler.as_bytes());
 
     }
     Ok(())
@@ -92,7 +83,7 @@ fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, de
                 Ok(x) => x,
                 Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
             };
-            while true {
+            loop {
                 let current_entry = directory_iterator.next();
                 println!("ENTRY of DIR: {:?}", current_entry);
                 match current_entry {
@@ -131,7 +122,7 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                 Ok(x) => x,
                 Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
             };
-            while true {
+            loop {
                 let current_entry = directory_iterator.next();
                 match current_entry {
                     Some(x) => match x {
@@ -141,7 +132,7 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                     None => break,
                 }
             }
-            file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window);
+            file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window)?;
         } else {
 
             let mut my_path : PathBuf = PathBuf::new();
@@ -151,23 +142,22 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
             } else if consts::OS == "linux" || consts::OS == "macos" {
                 my_path = PathBuf::from(format!("{}/{}", destination, &current_path.display()));
             }
-            println!("PATH to create file is : {}", &my_path.display());
-            //let new_file = match File::create(my_path) {
-            //    Ok(x) => x,
-            //    Err(e) => {eprintln!("got error: {}", e); return Err(HelpMessage::FailedToMakeFile)}
-            //};
-            let new_file = match file_nested_dirs(&my_path) {
+            let parent_path : &Path = &my_path.parent().unwrap();
+            //Changes the file extension of what it was to '.txt', which the BadUSB format requires.
+            let txt_path : PathBuf = PathBuf::from(PathBuf::from(&my_path.file_name().unwrap()).file_stem().unwrap()).with_extension("txt"); 
+            //Rejoins parent and new file names, after change to file name extension.
+            let joined_path : PathBuf = parent_path.join(&txt_path);
+            let new_file = match file_nested_dirs(&joined_path) {
                 Ok(file) => file,
                 Err(e) => {eprintln!("Got error message: {:?}", e); return Err(e)},
             };
-            //1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
             let mut write_buf = BufWriter::with_capacity(1000000, new_file);
 
             let start_boiler: String = start_boilerplate(target_os, true, destination );
-            write_buf.write(start_boiler.as_bytes());
+            let _ = write_buf.write(start_boiler.as_bytes());
 
             let file_content : String = make_file_boilerplate(target_os, &current_path, destination, false, true);
-            write_buf.write(file_content.as_bytes());
+            let _ = write_buf.write(file_content.as_bytes());
 
             if execute {
                 // Here I use &current path instead of x_value, I do this because on -m flag it makes no sense
@@ -177,15 +167,15 @@ fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, dest
                     Ok(x) => x,
                     Err(e) => panic!("Got an error: {:?}",e),
                 };
-                write_buf.write(execute_boiler.as_bytes());
+                let _ = write_buf.write(execute_boiler.as_bytes());
             }
 
             let end_boiler: String = end_boilerplate(target_os, close_window);
-            write_buf.write(end_boiler.as_bytes());
+            let _ = write_buf.write(end_boiler.as_bytes());
 
             //This pushes the contents of the buffer to the file. 
             match write_buf.flush() {
-                Ok(x) => println!("Successfully wrote file."),
+                Ok(_x) => println!("Successfully wrote file."),
                 Err(e) => {eprintln!("got error: {}", e); return Err(HelpMessage::BufferFlushFailed)} 
             };
         }
@@ -204,7 +194,7 @@ fn file_nested_dirs(my_path: &PathBuf) -> Result<File, HelpMessage> {
     };
     match File::create(my_path) {
         Ok(file) => Ok(file),
-        Err(e) => Err(HelpMessage::FailedToMakeFile),
+        Err(_e) => Err(HelpMessage::FailedToMakeFile),
     }
 }
 //Function to change the \ to / and reverse.
@@ -520,14 +510,12 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 enum HelpMessage {
     NotEnoughArgs,
     WrongArgOS,
-    FileDoesNotExist,
     MissingFlagValueO,
     MissingFlagValueX,
     DirectoryDoesNotExist,
     FailedToGetFile,
     FailedToMakeFile,
     BufferFlushFailed,
-    FailedToCreateDirectory,
     NoValueForFlagM,
     NoValueForFlagD,
     CannotCombineFlagsMF,
@@ -536,7 +524,6 @@ enum HelpMessage {
     FailedMakingDirs,
     FailedWorkingPath,
     FailedRecursionFS,
-    FailedStrippingPrefix,
     PrintingHelp,
 }
 
@@ -558,7 +545,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
     let mut close_window : bool = false;
 
 
-    while true {
+    loop {
         let c_arg = iterator_args.next();
         match c_arg {
             Some(x) => 
@@ -597,7 +584,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
                                     Ok(x) => x,
                                     Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
                                 };
-                                while true {
+                                loop {
                                     let current_entry = directory_iterator.next();
                                     match current_entry {
                                         Some(x) => match x {
@@ -628,7 +615,7 @@ fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bo
                                             Some(x) => x,
                                             None => return Err(HelpMessage::NoDestinationSpecified)
                                         };
-                                        while true {
+                                        loop {
                                             let current_entry = directory_iterator.next();
                                             match current_entry {
                                                 Some(x) => match x {
