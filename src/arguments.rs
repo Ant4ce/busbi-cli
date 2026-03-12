@@ -8,7 +8,8 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
     let mut iterator_args = args.into_iter();
     let _ = iterator_args.next();
 
-    //TODO: Set this to 'Windows' or 'Unix' to make it default.
+    let valid_os : [&str; 2] = ["windows", "unix"];
+    //Set this to 'Windows' or 'Unix' to make it default.
     let mut os_target : &str = "windows"; 
     let mut executable : bool = false;
     let mut x_value : PathBuf = PathBuf::new();
@@ -27,7 +28,7 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
             Some(x) => 
             match x.as_str() {
                 "-o" | "--os"=> match iterator_args.next() {
-                            Some(x) => os_target = x,
+                            Some(x) => if valid_os.contains(&x.as_str()) {os_target = x} else {return Err(HelpMessage::WrongArgOS)},
                             None => return Err(HelpMessage::MissingFlagValueO)
                         },
                 "-x" | "--execute" => {
@@ -38,7 +39,6 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
                             }
                             
                         },
-                //TODO: this has to be the last option given. Mention in help.
                 "-d" | "--directory" => match iterator_args.next() {
                             Some(x) => {
                                 d_flag = true;
@@ -46,36 +46,19 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
                                     return Err(HelpMessage::CannotCombineFlagsMF)
                                 }
                                 source_path = PathBuf::from(x);
-                                //TODO: This might be redundant, check given read_dir throwing error
-                                //also, check. 
-                                if source_path.is_dir() != true {
-                                    eprintln!("Argument provided is not a directory: {}", source_path.display());
-                                    return Err(HelpMessage::DirectoryDoesNotExist)
-                                }
                                 target_dest = match iterator_args.next() {
                                     Some(x) => x,
                                     None => return Err(HelpMessage::NoDestinationSpecified)
                                 };
-                                let mut directory_iterator = match read_dir(&source_path) {
+                                list_files = match parse_directories(list_files, &source_path) {
                                     Ok(x) => x,
-                                    Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
+                                    Err(e) => return Err(e),
                                 };
-                                loop {
-                                    let current_entry = directory_iterator.next();
-                                    match current_entry {
-                                        Some(x) => match x {
-                                            Ok(y) => list_files.push(y.path()),
-                                            Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
-                                        },
-                                        None => break,
-                                    }
-                                }
                                 return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
                                 
                             },
                             None => return Err(HelpMessage::NoValueForFlagD)
                 },
-                //TODO: this has to be the last option given. Mention in help.
                 "-m" | "--many" => match iterator_args.next() {
                             Some(x) => {
                                         m_flag = true;
@@ -83,24 +66,14 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
                                             return Err(HelpMessage::CannotCombineFlagsMF)
                                         }
                                         source_path = PathBuf::from(x);
-                                        let mut directory_iterator = match read_dir(&source_path) {
-                                            Ok(x) => x,
-                                            Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
-                                        };
                                         target_dest = match iterator_args.next() {
                                             Some(x) => x,
                                             None => return Err(HelpMessage::NoDestinationSpecified)
                                         };
-                                        loop {
-                                            let current_entry = directory_iterator.next();
-                                            match current_entry {
-                                                Some(x) => match x {
-                                                    Ok(y) => list_files.push(y.path()),
-                                                    Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
-                                                },
-                                                None => break,
-                                            }
-                                        }
+                                        list_files = match parse_directories(list_files, &source_path) {
+                                            Ok(x) => x,
+                                            Err(e) => return Err(e),
+                                        };
                                         return Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
                                         },
                             None => return Err(HelpMessage::NoValueForFlagM),
@@ -119,4 +92,25 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
         return Err(HelpMessage::NotEnoughArgs)
     }
     Ok((os_target, executable, x_value, d_flag, m_flag, source_path, target_dest, list_files, close_window))
+}
+
+//Function to complete the list of files within a directory.
+pub fn parse_directories(mut list : Vec<PathBuf>, source_path: &PathBuf) -> Result<Vec<PathBuf>, HelpMessage> {
+
+    let mut directory_iterator = match read_dir(source_path) {
+        Ok(x) => x,
+        Err(e) => {println!("Argument provided for '-d' is not valid, got this error: {:?}", e); return Err(HelpMessage::WrongDirectoryArg)},
+    };
+    loop {
+        let current_entry = directory_iterator.next();
+        match current_entry {
+            Some(x) => match x {
+                Ok(y) => list.push(y.path()),
+                Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
+            },
+            None => break,
+        }
+    }
+    Ok(list)
+
 }

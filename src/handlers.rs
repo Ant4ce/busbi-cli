@@ -1,35 +1,21 @@
-use std::{env::consts, fs::{File, read_dir, create_dir_all}};
+use std::{env::consts, fs::{File, create_dir_all}};
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+use crate::arguments::parse_directories;
 use crate::help_msg::{HelpMessage};
 use crate::boilerplates::{make_file_boilerplate, start_boilerplate, end_boilerplate, executable_boilerplate};
 
 pub fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str) -> Result<String, HelpMessage> {
     let mut grande_string : String = String::new();
-    println!("list of paths: {:?}", &source_files);
     for current_path in source_files {
         if current_path.is_dir() {
-            println!("current directory: {}", &current_path.display());
             let mut list_files : Vec<PathBuf> = Vec::new();
-            //TODO add this whole section for getting the iterator as it's own function, as this is
-            //now already used 3 times in the code. 
-            let mut directory_iterator = match read_dir(&current_path) {
+
+            list_files = match parse_directories(list_files, &current_path) {
                 Ok(x) => x,
-                Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
+                Err(e) => return Err(e),
             };
-            loop {
-                let current_entry = directory_iterator.next();
-                println!("ENTRY of DIR: {:?}", current_entry);
-                match current_entry {
-                    Some(x) => match x {
-                        Ok(y) => list_files.push(y.path()),
-                        Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
-                    },
-                    None => break,
-                }
-            }
-            println!("value of list_files : {:?}", list_files);
             match d_flag_handler(target_os, execute, list_files, destination) {
                 Ok(x) => {
                             println!("Success."); 
@@ -46,27 +32,15 @@ pub fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>
     Ok(grande_string)
 } 
 
-//TODO: remove this code from the "main" function and just use this function, loop over it for when
-//handed directory. Then test it.
 pub fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, destination: &str, d_flag: bool, m_flag: bool, close_window : bool) -> Result<(), HelpMessage> {
 
     for current_path in source_files {
         if current_path.is_dir() {
             let mut list_files : Vec<PathBuf> = Vec::new();
-            let mut directory_iterator = match read_dir(&current_path) {
+            list_files = match parse_directories(list_files, &current_path) {
                 Ok(x) => x,
-                Err(e) => {println!("got error: {:?}", e); return Err(HelpMessage::DirectoryDoesNotExist)},
+                Err(e) => return Err(e),
             };
-            loop {
-                let current_entry = directory_iterator.next();
-                match current_entry {
-                    Some(x) => match x {
-                        Ok(y) => list_files.push(y.path()),
-                        Err(e) => {eprintln!("got error: {:?}", e); return Err(HelpMessage::FailedToGetFile)},
-                    },
-                    None => break,
-                }
-            }
             file_handler(target_os, execute, list_files, destination, d_flag, m_flag, close_window)?;
         } else {
 

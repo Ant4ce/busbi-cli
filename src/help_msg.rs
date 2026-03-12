@@ -4,7 +4,7 @@ pub enum HelpMessage {
     WrongArgOS,
     MissingFlagValueO,
     MissingFlagValueX,
-    DirectoryDoesNotExist,
+    WrongDirectoryArg,
     FailedToGetFile,
     FailedToMakeFile,
     BufferFlushFailed,

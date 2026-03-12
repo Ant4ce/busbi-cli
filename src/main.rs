@@ -14,12 +14,11 @@ use handlers::{file_handler, d_flag_handler};
 fn main() -> io::Result<()> {
     let args : Vec<String> = env::args().collect();
 
-    //let Ok((target_os, source_file, destination_file)) = parse_args(&args) else { panic!("Err: Wrong usage, try again.")};
     let (target_os, execute, x_value, d_flag, m_flag, source_file, destination, list_files, close_window) = match parse_args_advanced(&args) {
         Ok(x) => x,
         Err(e) => match e {
             HelpMessage::PrintingHelp => {println!("Hope that helped :)"); return Ok(())},
-            _ => panic!("Got another error. Check usage. Got: {:?}", e),
+            _ => {println!("Got an error. Check your usage. Got: {:?}", e); println!("Use '--help' or '-h' for usage instructions."); return Ok(())},
         }
     };
     println!("{}, {}, {}, {}", d_flag, m_flag, source_file.display(), destination);
@@ -35,7 +34,7 @@ fn main() -> io::Result<()> {
         }
     } else if d_flag {
         let new_file = File::create(destination)?;
-        //1MB capacity for the buffer, TODO: make this an optional flag, which can be controlled.  
+        //1MB capacity for the buffer, feel free to change this.  
         let mut write_buf = BufWriter::with_capacity(1000000, new_file);
         let start_boiler: String = start_boilerplate(target_os, true, destination);
         let _ = write_buf.write(start_boiler.as_bytes());

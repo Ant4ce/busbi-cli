@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::help_msg::{HelpMessage};
+use crate::help_msg::HelpMessage;
 use crate::handlers::{adapt_path, read_lines};
 
 pub fn executable_boilerplate(os_type: &str, source_file: &PathBuf, destination : &str, d_flag: bool, m_flag: bool) -> Result<String, HelpMessage> {
@@ -43,7 +43,7 @@ pub fn executable_boilerplate(os_type: &str, source_file: &PathBuf, destination 
     if d_flag {
         if os_type.to_lowercase() == "windows" {
             execute_string.push_str(format!(
-                    "STRINGLN $code = Get-Content .\\$HOME\\{}\\{} -Raw\n\
+                    "STRINGLN $code = Get-Content $HOME\\{}\\{} -Raw\n\
                     DELAY 400\n\
                     STRINGLN Invoke-Expression $code\n\
                     ", no_suffix_dest, no_prefix_adapted_path).as_str());
@@ -62,7 +62,7 @@ pub fn executable_boilerplate(os_type: &str, source_file: &PathBuf, destination 
     } else if m_flag {
         if os_type.to_lowercase() == "windows" {
             execute_string.push_str(format!(
-                    "STRINGLN $code = Get-Content .\\$HOME\\{}\\{} -Raw\n\
+                    "STRINGLN $code = Get-Content $HOME\\{}\\{} -Raw\n\
                     DELAY 400\n\
                     STRINGLN Invoke-Expression $code\n\
                     ", no_suffix_dest, file_name).as_str());
@@ -126,8 +126,7 @@ pub fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d
         Some(x) => x.to_str().unwrap(),
         None => panic!("No file name. Unrecoverable error."),
     };
-    // To get rid of the file extensions as it looks weird to call a directory 'script.txt' for
-    // example.
+    // To get rid of the file extensions as it looks weird to call a directory 'script.txt'.
     let mod_dest : Vec<&str> = dest.split('.').collect();
     let no_suffix_dest : &str = mod_dest[0];
 
@@ -165,7 +164,6 @@ pub fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d
         }
     }
     if let Ok(lines) = read_lines(&source_file) {
-        //print_type_of(&lines);
         for line in lines.map_while(Result::ok) {
             let mut mod_line : String = line.clone();
             // Its necessary to check if the line is empty. The ducky script runs so fast that
@@ -217,7 +215,6 @@ pub fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d
     mf_string
 }
 
-//TODO make this a return statement with Result<String, HelpMessage>
 pub fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
     
     let mut os_start_string :String = String::new(); 
@@ -253,17 +250,12 @@ pub fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
                 "STRINGLN mkdir $HOME/{}\n\
             ", no_suffix_dest).as_str());
         }
-    } else {
-        println!("Something went wrong the boilerplate start function got the wrong OS type: {}", os_type);
-        //TODO: proper error handling.
-        panic!();
-    }
-
+    } 
     os_start_string
 
 }
 
-//Add whatever the final part of the Bad usb script should do here.
+//Whatever String this function produces will be added to the end of any file produced.
 pub fn end_boilerplate(os_type: &str , close_window : bool) -> String {
     let mut os_end_string: String = String::new();
     if close_window {
