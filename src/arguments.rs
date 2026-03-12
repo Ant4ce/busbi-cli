@@ -6,6 +6,8 @@ use crate::help_msg::{HelpMessage, help_message};
 pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool, bool, PathBuf, &str, Vec<PathBuf>, bool), HelpMessage> {
     
     let mut iterator_args = args.into_iter();
+    //First argument is not used, part of rust programming language to return binary path from
+    //which it is called.
     let _ = iterator_args.next();
 
     let valid_os : [&str; 2] = ["windows", "unix"];
@@ -28,7 +30,10 @@ pub fn parse_args_advanced(args: &[String]) -> Result<(&str, bool, PathBuf, bool
             Some(x) => 
             match x.as_str() {
                 "-o" | "--os"=> match iterator_args.next() {
-                            Some(x) => if valid_os.contains(&x.as_str()) {os_target = x} else {return Err(HelpMessage::WrongArgOS)},
+                            Some(x) => if valid_os.contains(&x.as_str()) {os_target = x} else {
+                                println!("Error: '{}' is not a legal option, use either 'windows' or 'unix'", x); 
+                                return Err(HelpMessage::WrongArgOS)
+                                },
                             None => return Err(HelpMessage::MissingFlagValueO)
                         },
                 "-x" | "--execute" => {
