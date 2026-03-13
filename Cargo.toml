@@ -2,5 +2,11 @@
 name = "busbi"
 version = "0.2.1"
 edition = "2024"
+license = "MIT"
+license-file = "LICENSE"
+keywords = ["flipper-zero", "bad-USB", "automation", "cli"]
+description = "A CLI tool to create Bad-USB scripts from shell scripts for quick use."
+readme = "README.md"
+repository = "https://github.com/Ant4ce/busbi-cli.git"
 
 [dependencies]

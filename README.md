@@ -11,6 +11,14 @@ such as config files or setup scripts. As long as the files are text based it wi
 Note: It creates BadUSB scripts based on the Flipper Zero standard described here:
 https://developer.flipper.net/flipperzero/doxygen/badusb_file_format.html
 
+## OS support 
+
+Tested for: 
+
+Windows AND Linux
+
+Should in theory also work for MacOS, have not tested it. 
+
 ## Usage
 
 For creating a simple bad usb file out of a script, simply invoke busbi with the file you want to copy over to another system and the
@@ -56,3 +64,15 @@ Combine this with `-x` and `-o` to explicitely target an OS and execute a specif
 
 This will recreate the entire directory (`my_folder`) and all it contains under `$HOME/my_bad_USB/` and then it will run the 
 script at `$HOME/my_bad_USB/my_folder/my_shell_script.sh`.
+
+### Help
+
+Use `--help` or `-h` for more extensive usage instructions.
+
+If you wish to modify this code and run it with:
+
+`cargo run` 
+
+then remember all flags and arguments for the command will come after the `--`. Like in this example:
+
+`cargo run -- -o unix test_file.sh test_bad_usb.txt`
