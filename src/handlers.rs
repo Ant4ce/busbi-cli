@@ -18,7 +18,6 @@ pub fn d_flag_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>
             };
             match d_flag_handler(target_os, execute, list_files, destination) {
                 Ok(x) => {
-                            println!("Success."); 
                             grande_string.push_str(&x);
                         },
                 Err(e) => {eprintln!("Failed to process files/directories. Got error : {:?}", e); return Err(HelpMessage::FailedRecursionFS)},
@@ -77,11 +76,10 @@ pub fn file_handler(target_os: &str, execute: bool, source_files: Vec<PathBuf>, 
                     Err(e) => panic!("Got an error: {:?}",e),
                 };
                 let _ = write_buf.write(execute_boiler.as_bytes());
+            } else {
+                let end_boiler: String = end_boilerplate(target_os, close_window);
+                let _ = write_buf.write(end_boiler.as_bytes());
             }
-
-            let end_boiler: String = end_boilerplate(target_os, close_window);
-            let _ = write_buf.write(end_boiler.as_bytes());
-
             //This pushes the contents of the buffer to the file. 
             match write_buf.flush() {
                 Ok(_x) => println!("Successfully wrote file."),

@@ -21,13 +21,13 @@ pub fn executable_boilerplate(os_type: &str, source_file: &PathBuf, destination 
     if os_type.to_lowercase() == "windows" {
         no_prefix_adapted_path = match adapted_path.strip_prefix("\\") {
             Ok(x) => x.to_str().unwrap(),
-            Err(e) => {eprintln!("No prefix: {:?}, Continuing...", e); adapted_path.to_str().unwrap()},
+            Err(_e) => {eprintln!("No prefix: Continuing..."); adapted_path.to_str().unwrap()},
         };
 
     } else if os_type.to_lowercase() == "unix" {
         no_prefix_adapted_path = match adapted_path.strip_prefix("/") {
             Ok(x) => x.to_str().unwrap(),
-            Err(e) => {eprintln!("No prefix: {:?}, Continuing...", e); adapted_path.to_str().unwrap()},
+            Err(_e) => {eprintln!("No prefix: Continuing..."); adapted_path.to_str().unwrap()},
         };
 
     }
@@ -140,8 +140,6 @@ pub fn make_file_boilerplate(os_type: &str, source_file: &PathBuf, dest: &str, d
         "STRINGLN $file = @'\n\
         ");
     } else if os_type.to_lowercase() == "unix" {
-        //TODO create_dir here essentially acts like d_flag check, since d and m can't happen at
-        //the same time, chain these. Do check if they actually do the right thing.
         if d_flag {
             mf_string.push_str(format!(
                 "STRINGLN mkdir -p $HOME/{}/{}\n\
@@ -256,6 +254,8 @@ pub fn start_boilerplate(os_type: &str, is_dir : bool ,dest: &str) -> String {
 }
 
 //Whatever String this function produces will be added to the end of any file produced.
+//Use it as you see fit. Currently only runs if '-x' flag is NOT true.
+//TODO make this more soffisticated with '-x' so both can be true at the same time. 
 pub fn end_boilerplate(os_type: &str , close_window : bool) -> String {
     let mut os_end_string: String = String::new();
     if close_window {
